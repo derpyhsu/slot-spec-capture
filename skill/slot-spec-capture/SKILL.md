@@ -46,3 +46,4 @@ Win presentation and buy feature are part of the spec. Fill them, or list the ga
 - Rules shown as images are not read by the probe. Screenshot and transcribe free-game, buy-feature, extra-bet, and win-tier pages. List only the still-unreadable parts in `openQuestions`.
 - Spine and audio hooks may record nothing on some Cocos 3.x builds. Node show/hide still gives the order and timing.
 - Events do not record grid position yet.
+- Cocos Creator only. If `window.cc` is missing, stop and tell the user the game is not supported.
