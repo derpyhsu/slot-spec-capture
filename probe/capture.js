@@ -20,7 +20,9 @@
       const cam = scene().getComponentsInChildren(cc.Camera).find((c) => c.visibility & node.layer);
       s = cam.worldToScreen(node.worldPosition, new cc.Vec3());
     } else {
-      s = cc.Camera.findCamera(node).getWorldToScreenPoint(node.convertToWorldSpaceAR(cc.v2(0, 0)));
+      // 2.x: world (design units) -> canvas pixels through the viewport rect and scale.
+      const w = node.convertToWorldSpaceAR(cc.v2(0, 0)), vp = cc.view.getViewportRect();
+      s = { x: vp.x + w.x * cc.view.getScaleX(), y: vp.y + w.y * cc.view.getScaleY() };
     }
     const c = canvas(), r = c.getBoundingClientRect();
     return [r.left + (s.x / c.width) * r.width, r.bottom - (s.y / c.height) * r.height];
@@ -69,7 +71,8 @@
   // ---- presentation recorder ----
   const ev = [];
   let rec = false;
-  const push = (k, n, v) => { if (rec && ev.length < 20000) ev.push([now(), k, n, v]); };
+  let act = 0, txt = 0; // counts events that mean the game is still presenting (not tween builds)
+  const push = (k, n, v) => { if (rec && ev.length < 60000) { ev.push([now(), k, n, v]); if (k === 'show' || k === 'hide' || k === 'text') act++; if (k === 'text') txt++; } };
   const hook = (proto, fn, k, nameOf) => {
     if (!proto || !proto[fn] || proto[fn].__sc) return;
     const orig = proto[fn];
@@ -91,6 +94,58 @@
     const an = (_, a) => (a[0] && (a[0].name || a[0].nativeUrl || a[0]._name)) || 'clip';
     hook(cc.audioEngine, 'play', 'sfx', an); hook(cc.audioEngine, 'playEffect', 'sfx', an); hook(cc.audioEngine, 'playMusic', 'bgm', an);
   }
+  // Tweens: duration + easing straight from the engine (cc.tween in 2.x and 3.x).
+  const easeName = (o) => { const e = o && o.easing; return e == null ? 'linear' : typeof e === 'string' ? e : (e.name || 'fn'); };
+  const tgtName = (tg) => !tg ? '?' : tg.name !== undefined && tg.children ? (tg.parent ? tg.parent.name + '/' : '') + tg.name : tg.node ? nodeName(tg) : 'obj';
+  const TW = cc.Tween && cc.Tween.prototype;
+  for (const fn of ['to', 'by']) {
+    if (!TW || !TW[fn] || TW[fn].__sc) continue;
+    const o = TW[fn];
+    TW[fn] = function (d, props, opts) {
+      try { push('tween', tgtName(this._target), `${fn}|${d}|${easeName(opts)}|${props ? Object.keys(props).join('+') : ''}`); } catch (e) {}
+      return o.apply(this, arguments);
+    };
+    TW[fn].__sc = 1;
+  }
+  // Legacy 2.x actions (cc.moveTo(...).easing(...)): duration and whether eased.
+  if (!is3 && cc.Node.prototype.runAction && !cc.Node.prototype.runAction.__sc) {
+    const o = cc.Node.prototype.runAction;
+    cc.Node.prototype.runAction = function (a) {
+      try { push('action', (this.parent ? this.parent.name + '/' : '') + this.name, `${a && a._duration != null ? a._duration : '?'}|ease${a && a._easeList ? a._easeList.length : 0}`); } catch (e) {}
+      return o.apply(this, arguments);
+    };
+    cc.Node.prototype.runAction.__sc = 1;
+  }
+
+  // Motion: per-frame local position/scale of every node that moves. Rest sample before and after each move.
+  const mot = [], names = [], parents = [], ids = new Map(), last = new Map();
+  let prevT = 0;
+  function sample() {
+    if (!rec) return;
+    const t = now();
+    const walk = (n) => {
+      if (!n.activeInHierarchy) return;
+      const p = is3 ? n.position : n;
+      const x = Math.round(p.x * 10) / 10, y = Math.round(p.y * 10) / 10;
+      const s = Math.round((is3 ? n.scale.x : n.scaleX) * 1000) / 1000;
+      const L = last.get(n.uuid);
+      if (!L) last.set(n.uuid, [x, y, s, false]);
+      else if (L[0] !== x || L[1] !== y || L[2] !== s) {
+        let id = ids.get(n.uuid);
+        if (id === undefined) { id = names.length; ids.set(n.uuid, id); names.push((n.parent ? n.parent.name + '/' : '') + n.name); parents.push(n.parent ? n.parent.uuid : ''); }
+        if (mot.length < 400000) { if (!L[3]) mot.push([prevT, id, L[0], L[1], L[2]]); mot.push([t, id, x, y, s]); }
+        L[0] = x; L[1] = y; L[2] = s; L[3] = true;
+      } else if (L[3]) {
+        L[3] = false;
+        if (mot.length < 400000) mot.push([t, ids.get(n.uuid), x, y, s]);
+      }
+      n.children.forEach(walk);
+    };
+    walk(scene());
+    prevT = t;
+  }
+  cc.director.on(cc.Director.EVENT_AFTER_UPDATE, sample);
+
   // Node visibility + short label changes, polled.
   let seen = new Map(), lab = new Map();
   function poll() {
@@ -113,14 +168,18 @@
   }
   setInterval(poll, 100);
 
-  async function spin(btn = 'SpinBtn', quietMs = 3000, maxMs = 240000) {
+  const SPIN = ['SpinBtn', 'HitArea', 'SpinButton', 'Spin', 'BtnSpin', 'spinBtn'];
+  async function spin(btn, quietMs = 3000, maxMs = 240000) {
     const start = ev.length, ts = now();
     push('mark', 'spin', String(ts));
-    await tap(btn);
-    let last = ev.length, lastT = now();
+    const b = btn || SPIN.find((n) => find(n));
+    if (!b) return { ms: 0, events: 0, error: 'noSpinButton' };
+    // Retry the tap when nothing on screen changes text (balance/bet) within 4 s: UI may not be interactable yet.
+    for (let k = 0; k < 3; k++) { const t0 = txt; await tap(b); let ok = false; for (let w = 0; w < 16 && !ok; w++) { await sleep(250); ok = txt !== t0; } if (ok) break; }
+    let last = act, lastT = now();
     while (now() - ts < maxMs) {
       await sleep(250);
-      if (ev.length !== last) { last = ev.length; lastT = now(); }
+      if (act !== last) { last = act; lastT = now(); }
       else if (now() - lastT > quietMs && now() - ts > 2000) break;
     }
     return { ms: now() - ts, events: ev.length - start };
@@ -130,9 +189,11 @@
     find, tap, tapXY, labels, buttons, rules, spin,
     start() { seen = new Map(); lab = new Map(); rec = true; push('mark', 'start'); poll(); return 'rec'; },
     // Fire-and-forget batch so a long free game never times out the MCP call. Poll status().
-    run(n, btn = 'HitArea') { const st = (this._run = { done: 0, n, end: false }); this.start(); (async () => { for (let i = 0; i < n; i++) { await spin(btn); st.done++; } this.stop(); st.end = true; })(); return 'started'; },
+    run(n, btn) { const st = (this._run = { done: 0, n, end: false }); this.start(); (async () => { for (let i = 0; i < n; i++) { await spin(btn); st.done++; } this.stop(); st.end = true; })(); return 'started'; },
     status() { return this._run; },
     stop() { rec = false; return ev.length; },
     events: () => ev,
+    // Save to specs/<gameId>/motion.json. Rows: [t, id, x, y, scale]; names[id] = "parent/node".
+    motion: () => ({ names, parents, mot }),
   };
 })();

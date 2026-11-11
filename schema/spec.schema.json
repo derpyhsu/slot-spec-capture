@@ -30,8 +30,8 @@
         "spinMode": { "$ref": "#/$defs/field", "description": "spin | drop" },
         "dropMode": { "$ref": "#/$defs/field", "description": "whole | perReel | perCell | none" },
         "cascade": { "$ref": "#/$defs/field", "description": "{enabled, refill: inPlace|fromTop}" },
-        "freeGame": { "$ref": "#/$defs/field", "description": "{trigger, initialSpins, retrigger, multiplier}" },
-        "buyFeature": { "$ref": "#/$defs/field", "description": "{available, costX, target}" },
+        "freeGame": { "$ref": "#/$defs/field", "description": "{trigger, initialSpins, retrigger, multiplier}. Trigger show and one free spin go in presentation.timelines when a free game actually starts." },
+        "buyFeature": { "$ref": "#/$defs/field", "description": "{available, costX, target, options?}. options[] when several packages exist: {name, costX, target}. Read the panel; do not confirm a purchase." },
         "wild": { "$ref": "#/$defs/field", "description": "{substitutesExcept[], reels[]}" },
         "scatter": { "$ref": "#/$defs/field" },
         "paytable": { "$ref": "#/$defs/field", "description": "{symbolId: {count: payX}}" },
@@ -64,7 +64,7 @@
       "properties": {
         "spinMs": { "$ref": "#/$defs/field", "description": "Typical no-win spin duration" },
         "reelStop": { "$ref": "#/$defs/field", "description": "together | perReel | anticipation" },
-        "winShow": { "$ref": "#/$defs/field", "description": "lines | symbolHighlight | marquee | bigWin tiers" },
+        "winShow": { "$ref": "#/$defs/field", "description": "{small: {sequence[], durationMs}, bigWin: {tiers: [{name, thresholdX?}], seen}}. sequence is the order a winning spin plays: reel stop, line or symbol highlight, win anim, marquee or count-up, balance roll. Timelines hold one example of each distinct show." },
         "featureCues": {
           "type": "array",
           "description": "Per mechanic: which nodes/anims/sfx announce it, and when",

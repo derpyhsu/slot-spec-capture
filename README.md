@@ -14,7 +14,8 @@ Probe (Cocos Creator 2.x / 3.x)
   - `run(n)` / `status()` run fire-and-forget spins and record presentation events (node show/hide, Spine/clip anims, sfx, label changes).
   - `events()` returns the recorded events. Save them to `specs/<gameId>/events.json`.
 - `node probe/summarize.js specs/<gameId>` writes `presentation.json`: spin times, plus rare cues (nodes and anims that appear only in some spins). Rare cues are where special mechanics show up.
-- Rules shown as images are invisible to the probe. List them in `openQuestions`.
+- Rules shown as images are invisible to the probe. Screenshot and transcribe free-game, buy-feature, and win-tier pages; list only the unread parts in `openQuestions`.
+- Buy-feature panels are read and closed. Do not confirm a purchase.
 
 Rules
 - Read the rules page. Skip bet history.

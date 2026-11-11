@@ -72,8 +72,8 @@ if (s.features && s.features.length) {
   }
 }
 
-const p = s.presentation;
-if (p) {
+function presentation(L, p) {
+  if (!p) return;
   L.push('## 表演', '', fieldRows(p, PRES), '');
   if (p.featureCues && p.featureCues.length) {
     L.push('### 玩法對應的表演節點', '', '| 玩法 | 節點 | 出現轉數 |', '|---|---|---|');
@@ -97,3 +97,34 @@ if (s.openQuestions && s.openQuestions.length) { L.push('## 待確認', ''); s.o
 
 fs.writeFileSync(path.join(dir, 'spec.md'), L.join('\n'));
 console.log('wrote ' + path.join(dir, 'spec.md'));
+fs.writeFileSync(path.join(dir, 'feel.md'), feel(s));
+console.log('wrote ' + path.join(dir, 'feel.md'));
+
+// ---- feel.md: presentation and motion ----
+function feel(s) {
+  const L = [];
+  const g = s.game;
+  L.push(`# ${g.title || g.id}：表演與體感`, '', `- 遊戲 ID：\`${g.id}\``, `- 記錄日期：${s.capturedAt}`,
+    '- 數字來自引擎（tween 參數、每幀節點位置），不是截圖目測。時間誤差約 ±1 幀。', '');
+  presentation(L, s.presentation);
+  const mf = path.join(dir, 'motion-summary.json');
+  if (!fs.existsSync(mf)) { L.push('## 動態量測', '', '尚未量測（沒有 motion-summary.json）。', ''); return L.join('\n'); }
+  const m = JSON.parse(fs.readFileSync(mf, 'utf8'));
+  const AX = { x: '水平', y: '垂直', scale: '縮放' };
+  const rows = m.groups.filter((x) => x.spins >= 2 || x.kind === 'scroll').slice(0, 30);
+  L.push('## 動態量測', '', `> ${m.spins} 轉、${m.samples} 筆每幀位置樣本。只列至少出現在 2 轉的動態；節點名稱的數字以 # 代替。`, '');
+  L.push('| 節點 | 類型 | 方向 | 時長 ms | 距離 | easing（擬合誤差） | 回彈 | 回彈收尾 ms | 欄間起步差 ms | 欄間停止差 ms | 轉數 |',
+    '|---|---|---|---|---|---|---|---|---|---|---|');
+  for (const x of rows) {
+    const kind = x.kind === 'scroll' ? `捲動 ${x.speed} px/s` : x.kind === 'pulse' ? `來回（${x.peakMs} ms 到頂）` : '位移';
+    const over = x.overshoot ? `${x.overshoot}${x.axis === 'scale' ? '%' : 'px'}，${x.bounces} 次` : '—';
+    L.push(`| \`${x.node}\` | ${kind} | ${AX[x.axis]}${x.dir} | ${x.durMs} | ${x.dist ?? '—'} | ${x.ease ? `${x.ease} (${x.fit})` : '—'} | ${over} | ${x.settleMs ?? '—'} | ${x.startStaggerMs ?? '—'} | ${x.stopStaggerMs ?? '—'} | ${x.spins} |`);
+  }
+  L.push('', '擬合誤差越小越準（0 = 完全吻合，> 0.1 表示不是標準曲線）。欄間差：同一轉裡，各軸或各欄開始、停止的時間差中位數。', '');
+  if (m.tweens.length) {
+    L.push('### 引擎 tween 參數', '', '| 對象 | 動作 | 時長 s | easing | 屬性 | 次數 |', '|---|---|---|---|---|---|');
+    for (const t of m.tweens.slice(0, 30)) L.push(`| \`${t.target}\` | ${t.op || t.kind} | ${t.durS} | ${t.ease} | ${t.props || ''} | ${t.count} |`);
+    L.push('');
+  }
+  return L.join('\n');
+}
