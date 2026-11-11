@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slot-spec-capture/spec.schema.json",
+  "title": "Slot raw spec (v0, draft)",
+  "description": "Raw observations of one slot game. Core fields are fixed; anything else goes to features[]. Every value is a Field: {value, source, confidence, ref?, note?}. Unknown stays {\"value\": null, \"source\": \"unknown\"}.",
+  "type": "object",
+  "required": ["schemaVersion", "game", "capturedAt", "core", "features"],
+  "properties": {
+    "schemaVersion": { "const": "0.1" },
+    "game": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "description": "Path slug from the URL. Never the query string." },
+        "title": { "type": "string" },
+        "provider": { "type": "string" },
+        "engine": { "type": "string" },
+        "locale": { "type": "string" }
+      }
+    },
+    "capturedAt": { "type": "string", "format": "date" },
+    "core": {
+      "type": "object",
+      "properties": {
+        "grid": { "$ref": "#/$defs/field", "description": "{cols, rows}; or {cols, rowsPerReel[]} when reels differ" },
+        "payModel": { "$ref": "#/$defs/field", "description": "lines | ways | cluster | scatterPay | other" },
+        "waysOrLines": { "$ref": "#/$defs/field" },
+        "payDirection": { "$ref": "#/$defs/field", "description": "leftToRight | bothWays | anywhere" },
+        "minMatch": { "$ref": "#/$defs/field" },
+        "spinMode": { "$ref": "#/$defs/field", "description": "spin | drop" },
+        "dropMode": { "$ref": "#/$defs/field", "description": "whole | perReel | perCell | none" },
+        "cascade": { "$ref": "#/$defs/field", "description": "{enabled, refill: inPlace|fromTop}" },
+        "freeGame": { "$ref": "#/$defs/field", "description": "{trigger, initialSpins, retrigger, multiplier}" },
+        "buyFeature": { "$ref": "#/$defs/field", "description": "{available, costX, target}" },
+        "wild": { "$ref": "#/$defs/field", "description": "{substitutesExcept[], reels[]}" },
+        "scatter": { "$ref": "#/$defs/field" },
+        "paytable": { "$ref": "#/$defs/field", "description": "{symbolId: {count: payX}}" },
+        "rtp": { "$ref": "#/$defs/field" },
+        "maxWin": { "$ref": "#/$defs/field" },
+        "betRange": { "$ref": "#/$defs/field" },
+        "jackpot": { "$ref": "#/$defs/field" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "description": "Special mechanics. Name them as the rules page does.",
+      "items": {
+        "type": "object",
+        "required": ["name", "during", "source"],
+        "properties": {
+          "name": { "type": "string" },
+          "during": { "enum": ["base", "free", "both", "buy"] },
+          "trigger": { "type": "string" },
+          "effect": { "type": "string" },
+          "params": { "type": "object" },
+          "source": { "$ref": "#/$defs/source" },
+          "ref": { "type": "string" }
+        }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "description": "How it looks and feels, from probe events (node show/hide, Spine/clip anims, sfx, label changes) and screenshots. Summary of presentation.json, not a copy.",
+      "properties": {
+        "spinMs": { "$ref": "#/$defs/field", "description": "Typical no-win spin duration" },
+        "reelStop": { "$ref": "#/$defs/field", "description": "together | perReel | anticipation" },
+        "winShow": { "$ref": "#/$defs/field", "description": "lines | symbolHighlight | marquee | bigWin tiers" },
+        "featureCues": {
+          "type": "array",
+          "description": "Per mechanic: which nodes/anims/sfx announce it, and when",
+          "items": { "type": "object", "properties": { "feature": { "type": "string" }, "cues": { "type": "array", "items": { "type": "string" } }, "seenInSpins": { "type": "integer" }, "source": { "$ref": "#/$defs/source" } } }
+        },
+        "character": { "$ref": "#/$defs/field", "description": "Mascot/role animation" },
+        "speedModes": { "$ref": "#/$defs/field" }
+      }
+    },
+    "ui": { "type": "object", "description": "Controls seen: autoplay options, turbo, feature menu, etc." },
+    "conflicts": { "type": "array", "items": { "type": "string" } },
+    "openQuestions": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "source": { "enum": ["rules", "observed", "clientConfig", "inferred", "unknown"] },
+    "field": {
+      "type": "object",
+      "required": ["value", "source"],
+      "properties": {
+        "value": {},
+        "source": { "$ref": "#/$defs/source" },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "ref": { "type": "string", "description": "Quote or line in rules.txt" },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

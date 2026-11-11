@@ -1,0 +1,6 @@
+# Merge this into ~/.codex/config.toml or the project Codex config.
+# Chrome DevTools MCP is the preferred browser for a slot-spec-capture run.
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest", "--isolated", "--chrome-arg=--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstModeV2ForTypicallySecureUsers,HttpsFirstModeV2ForEngagedSites,HttpsFirstModeWithEsbPairing,HttpsFirstModeDefaultSettingPairsWithEsb,HttpsFirstModeIncognito"]
