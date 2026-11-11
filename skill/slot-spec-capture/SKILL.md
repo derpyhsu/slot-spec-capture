@@ -36,10 +36,10 @@ Win presentation and buy feature are part of the spec. Fill them, or list the ga
 2. Load the probe: `evaluate_script` with `sourcePath: probe/capture.js` and `format: "script"`.
 3. `__specCap.buttons()` lists visible buttons. Open the menu, then help/rules, with `__specCap.tap(name)`. Save `__specCap.rules()` to `specs/<gameId>/rules.txt`. If tapping by node name misses, take one screenshot and tap by coordinates. Page through free-game, buy-feature, and extra-bet sections. When those pages are images, screenshot and transcribe them into `core.freeGame`, `core.buyFeature`, and `features[]`.
 4. Close the rules. If a buy control exists, open it, record the packages, and close it without paying.
-5. Record presentation with `__specCap.run(30)`. Poll `__specCap.status()` (each poll can wait up to ~60 s in-page) until `end` is true. Then save `__specCap.events()` to `specs/<gameId>/events.json`.
+5. Record presentation with `__specCap.run(30)`. Poll `__specCap.status()` (each poll can wait up to ~60 s in-page) until `end` is true. Then save `__specCap.events()` to `specs/<gameId>/events.json` and `__specCap.motion()` to `specs/<gameId>/motion.json`, then run `node probe/motion.js specs/<gameId>`. It measures reel scroll speed, stop stagger between reels, stop bounce, drop/refill duration and easing, and lists engine tween parameters. Read only its short console line and the top rows. Do not open motion.json.
 6. Run `node probe/summarize.js specs/<gameId>`. Rare cues (nodes or anims seen in only some spins) are where special mechanics and win shows appear. Write one `presentation.timelines` entry per distinct show, including at least one winning spin.
 7. Write `specs/<gameId>/spec.json` per the schema: core fields, `features[]` for special mechanics named as the rules name them, and `presentation`.
-8. Run `node report/build.js specs/<gameId>` to write `spec.md`. Do not hand-write `spec.md`.
+8. Run `node report/build.js specs/<gameId>`. It writes `spec.md` (rules spec) and `feel.md` (presentation and motion, from `spec.json` `presentation` and `motion-summary.json`). Do not hand-write either.
 
 ## Known limits
 

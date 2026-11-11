@@ -5,7 +5,9 @@ Capture the spec of an HTML5 slot as raw JSON, from its rules page and play. The
 - `schema/spec.schema.json`: v0 draft. Core fields are fixed. Special mechanics go to `features[]`. Each value records its source: `rules`, `observed`, `clientConfig`, `inferred`, or `unknown`.
 - `specs/<gameId>/`: `rules.txt` holds the rules page text, and `spec.json` holds the raw spec. These files are **gitignored** because captured data stays out of this repo.
 
-Human-readable copy: `node report/build.js specs/<gameId>` writes `spec.md` from `spec.json`. It only formats what `spec.json` says.
+Human-readable copies: `node report/build.js specs/<gameId>` writes `spec.md` (rules spec) and `feel.md` (presentation and motion). It only formats what `spec.json` and `motion-summary.json` say.
+
+Motion: `node probe/motion.js specs/<gameId>` reads `motion.json` (per-frame node positions) and engine tweens. It reports scroll speed, stop stagger, go-and-return bounces, and an easing fit. No screenshots are needed.
 
 Probe (Cocos Creator 2.x / 3.x)
 - `probe/capture.js`: load it with `evaluate_script` (`sourcePath`, `format: "script"`). It exposes `window.__specCap`:
