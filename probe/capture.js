@@ -63,7 +63,7 @@
     const all = labels();
     let a = all.findIndex((s) => /游戏帮助|遊戲幫助|赔付表|賠付表|PAY ?TABLE|Game ?Rules|Help/i.test(s));
     if (a < 0) a = 0;
-    let b = all.findIndex((s, i) => i > a && /^100 %$|滾輪參數設定|測試工具/.test(s));
+    let b = all.findIndex((s, i) => i > a && /^100 %$|滾輪參數設定|測試工具|測試列表|测试|Enter text here|余额低于准入|button$/.test(s));
     if (b < 0) b = all.length;
     return all.slice(a, b).join('\n');
   }
