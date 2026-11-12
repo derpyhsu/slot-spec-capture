@@ -32,7 +32,7 @@ function fieldRows(obj, names) {
     if (k === 'symbols' || k === 'lines') { rows.push(`| ${label} | 見下方 | ${SRC[f.source] || f.source} | ${CONF[f.confidence] || '—'} | ${esc(f.note || '')} |`); continue; }
     if (k === 'paytable' && typeof f.value === 'string') { rows.push(`| ${label} | ${esc(f.value)} | ${SRC[f.source] || f.source} | ${CONF[f.confidence] || '—'} | |`); continue; }
     if (k === 'paytable') { rows.push(`| ${label} | 見下方賠付表 | ${SRC[f.source] || f.source} | ${CONF[f.confidence] || '—'} | ${esc(f.note || '')} |`); continue; }
-    const note = [f.note, f.backend && `後端：${f.backend}`, f.ref && `「${f.ref}」`].filter(Boolean).join(' ');
+    const note = [f.note, f.ref && `「${f.ref}」`].filter(Boolean).join(' ');
     rows.push(`| ${label} | ${esc(fmt(f.value))} | ${SRC[f.source] || f.source} | ${CONF[f.confidence] || '—'} | ${esc(note)} |`);
   }
   return rows.join('\n');
@@ -51,9 +51,8 @@ L.push('## 核心規格', '', fieldRows(s.core, CORE), '');
 
 const sy = s.core.symbols && s.core.symbols.value;
 if (sy) {
-  L.push('### 符號表', '', '| 後端 id | 名稱 | 角色 | 3 連（×總押分/5） | id 來源 |', '|---|---|---|---|---|');
-  for (const x of sy) L.push(`| ${x.id ?? '量不到'} | ${x.name} | ${x.role} | ${x.pay3 ?? '—'} | ${SRC[x.idSource] || (x.idSource === 'backend' ? '後端' : x.idSource)} |`);
-  if (s.core.symbols.multiplierSymbols) L.push('', '倍數符號：' + s.core.symbols.multiplierSymbols.map((m) => `id ${m.id} = ${m.x}×`).join('、'));
+  L.push('### 符號表', '', '| 名稱 | 角色 | 3 連賠付 |', '|---|---|---|');
+  for (const x of sy) L.push(`| ${x.name} | ${x.role} | ${x.pay3 ?? '量不到'} |`);
   L.push('');
 }
 const ln = s.core.lines && s.core.lines.value;

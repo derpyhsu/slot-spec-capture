@@ -116,7 +116,7 @@
         },
         "symbols": {
           "$ref": "#/$defs/field",
-          "description": "[{id (backend), name, role: wild|scatter|normal|multiplier, pay3/pay4/pay5, idSource}] one row per symbol; multiplierSymbols[{id,x}]"
+          "description": "[{name, role: wild|scatter|normal|multiplier, pay3/pay4/pay5}] one row per symbol, from the rules and the screen"
         },
         "extraBet": {
           "$ref": "#/$defs/field",
@@ -128,7 +128,7 @@
         },
         "split": {
           "$ref": "#/$defs/field",
-          "description": "{perCell[], lineFactor, formula}; backend: how the server encodes it"
+          "description": "{perCell[], lineFactor, formula}"
         },
         "volatility": {
           "$ref": "#/$defs/field"
