@@ -71,8 +71,8 @@
   // ---- presentation recorder ----
   const ev = [];
   let rec = false;
-  let act = 0, txt = 0; // counts events that mean the game is still presenting (not tween builds)
-  const push = (k, n, v) => { if (rec && ev.length < 60000) { ev.push([now(), k, n, v]); if (k === 'show' || k === 'hide' || k === 'text') act++; if (k === 'text') txt++; } };
+  let act = 0, txt = 0, learning = false; const noise = new Set(); // nodes that blink while idle // counts events that mean the game is still presenting (not tween builds)
+  const push = (k, n, v) => { if (rec && ev.length < 60000) { ev.push([now(), k, n, v]); if (learning && (k === 'show' || k === 'hide')) noise.add(n); if ((k === 'show' || k === 'hide' || k === 'text') && !noise.has(n)) act++; if (k === 'text') txt++; } };
   const hook = (proto, fn, k, nameOf) => {
     if (!proto || !proto[fn] || proto[fn].__sc) return;
     const orig = proto[fn];
@@ -189,7 +189,7 @@
     find, tap, tapXY, labels, buttons, rules, spin,
     start() { seen = new Map(); lab = new Map(); rec = true; push('mark', 'start'); poll(); return 'rec'; },
     // Fire-and-forget batch so a long free game never times out the MCP call. Poll status().
-    run(n, btn) { const st = (this._run = { done: 0, n, end: false }); this.start(); (async () => { for (let i = 0; i < n; i++) { await spin(btn); st.done++; } this.stop(); st.end = true; })(); return 'started'; },
+    run(n, btn) { const st = (this._run = { done: 0, n, end: false }); this.start(); (async () => { learning = true; await sleep(3000); learning = false; st.noise = noise.size; for (let i = 0; i < n; i++) { await spin(btn); st.done++; } this.stop(); st.end = true; })(); return 'started'; },
     status() { return this._run; },
     stop() { rec = false; return ev.length; },
     events: () => ev,
