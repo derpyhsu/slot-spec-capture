@@ -21,7 +21,10 @@ const cand = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
 const reelT = (cand.find(([k]) => /symbol|Symbol|SlotRollerItem|PokerSymbol|Item/.test(k)) || cand[0] || [])[0];
 const reelIds = new Set(names.map((n, i) => (tmpl(n) === reelT ? i : -1)).filter((i) => i >= 0));
 const useParent = new Set([...reelIds].map((i) => parents[i])).size > 1;
-const colOf = (i) => (useParent ? parents[i] : (names[i].match(/_(\d+)_/) || [, '0'])[1]);
+const firstX = new Map();
+for (const r of mot) if (reelIds.has(r[1]) && !firstX.has(r[1])) firstX.set(r[1], r[2]);
+const hasIdx = [...reelIds].some((i) => /_(\d+)_/.test(names[i]));
+const colOf = (i) => (useParent ? parents[i] : hasIdx ? (names[i].match(/_(\d+)_/) || [, '0'])[1] : 'x' + Math.round((firstX.get(i) || 0) / 40));
 
 // samples per node
 const byId = new Map();
@@ -58,7 +61,7 @@ function columnCurve(c, t0, t1) {
     if (colOf(id) !== c) continue;
     for (let i = 1; i < L.length; i++) {
       const a = L[i - 1], b = L[i];
-      if (b[0] < t0 || b[0] >= t1 || b[0] - a[0] > 100) continue;
+      if (b[0] < t0 || b[0] >= t1 || b[0] - a[0] > 100 || b[0] - a[0] < 5) continue;
       const d = b[3] - a[3];
       if (cellPx && Math.abs(d) > 2 * cellPx) continue; // wrap-around jump
       if (!frames.has(b[0])) frames.set(b[0], []);
@@ -72,23 +75,30 @@ function analyseSpin(s) {
   const per = [];
   for (const c of cols) {
     const F = columnCurve(c, s.t0, Math.min(s.t1, s.t0 + 60000));
-    const mv = F.filter((f) => Math.abs(f.d) > 0.5);
+    let mv = F.filter((f) => Math.abs(f.d) > 0.5);
+    // keep the first continuous run only: later movement is win animation, not the reel
+    for (let i = 1; i < mv.length; i++) if (mv[i].t - mv[i - 1].t > 150) { mv = mv.slice(0, i); break; }
+    const Fcut = mv.length ? F.filter((f) => f.t <= mv[mv.length - 1].t + 50) : F;
     if (mv.length < 3) { per.push(null); continue; }
     const start = mv[0].t, stop = mv[mv.length - 1].t;
-    const dir = Math.sign(F.reduce((a, f) => a + f.d, 0)) || -1;
-    const v = mv.map((f) => (f.d / f.dt) * 1000);
-    const vmax = Math.max(...v.map(Math.abs));
+    const dir = Math.sign(Fcut.reduce((a, f) => a + f.d, 0)) || -1;
+    const v = mv.map((f) => (f.d / Math.max(f.dt, 12)) * 1000);
+    const av = v.map(Math.abs).sort((a, b) => a - b);
+    const vmax = av[Math.floor(av.length * 0.9)] || 0;
     const steady = med(v.filter((x) => Math.abs(x) > 0.5 * vmax).map(Math.abs));
     let off = 0, ext = -Infinity, tExt = stop, finalOff = 0;
     const offs = [];
-    for (const f of F) { if (f.t < start) continue; off += f.d; offs.push([f.t, off]); }
+    for (const f of Fcut) { if (f.t < start) continue; off += f.d; offs.push([f.t, off]); }
     finalOff = off;
     for (const [t, o] of offs) if (dir * o > ext) { ext = dir * o; tExt = t; }
     // deceleration: from the last frame still at >= 90% steady speed to the extreme point
     let tDec = start;
     for (let i = 0; i < mv.length; i++) if (mv[i].t <= tExt && Math.abs(v[i]) >= 0.9 * steady) tDec = mv[i].t;
     const over = ext - dir * finalOff;
-    per.push({ start: start - s.t0, stop: stop - s.t0, steady, decel: tExt - tDec, over, bounceMs: stop - tExt });
+    // pull-up: opposite-direction move before the reel runs its way
+    let pull = 0, tBack = null;
+    for (const [t, o] of offs) { if (-dir * o > pull) pull = -dir * o; if (pull > 0 && dir * o >= 0) { tBack = t; break; } }
+    per.push({ start: start - s.t0, stop: stop - s.t0, steady, decel: tExt - tDec, over, bounceMs: stop - tExt, pull, pullMs: tBack != null ? tBack - start : null });
   }
   return per;
 }
@@ -101,10 +111,10 @@ for (const s of res.filter((x) => !x.quick)) (modes[s.mode] = modes[s.mode] || [
 const cell = (px) => (cellPx && px != null ? px / cellPx : null);
 const speedModes = Object.entries(modes).map(([mode, S]) => {
   const ok = S.map((s) => s.cols).filter((c) => c.filter(Boolean).length === cols.length);
-  const startGap = [], stopGap = [], speed = [], decel = [], over = [], bms = [];
+  const startGap = [], stopGap = [], speed = [], decel = [], over = [], bms = [], pulls = [], pullMs = [];
   for (const c of ok) {
     for (let i = 1; i < c.length; i++) { startGap.push(c[i].start - c[i - 1].start); stopGap.push(c[i].stop - c[i - 1].stop); }
-    for (const x of c) { speed.push(x.steady); decel.push(x.decel); over.push(x.over); bms.push(x.bounceMs); }
+    for (const x of c) { speed.push(x.steady); decel.push(x.decel); over.push(x.over); bms.push(x.bounceMs); pulls.push(x.pull); if (x.pullMs != null) pullMs.push(x.pullMs); }
   }
   const sg = med(startGap), ov = cell(med(over));
   const bounce = ov == null ? null : ov < 0.02 ? 'none' : { cells: r2(ov), ms: r0(med(bms)) };
@@ -113,6 +123,7 @@ const speedModes = Object.entries(modes).map(([mode, S]) => {
     startGapMs: sg == null ? null : Math.abs(sg) < 20 ? 0 : r0(sg),
     scrollCellsPerSec: r2(cell(med(speed))),
     stopGapMs: r0(med(stopGap)), decelMs: r0(med(decel)), bounce,
+    pullUp: (() => { const p = cell(med(pulls)); return p == null ? null : p < 0.02 ? 'none' : { cells: r2(p), ms: r0(med(pullMs)) }; })(),
     firstStopMs: r0(med(ok.map((c) => c[0].stop))), lastStopMs: r0(med(ok.map((c) => c[c.length - 1].stop))),
   };
 });
@@ -161,7 +172,7 @@ for (const s of res.filter((x) => !x.quick)) {
   const stopAll = Math.max(...s.cols.filter(Boolean).map((c) => c.stop));
   if (!Number.isFinite(stopAll)) continue;
   const T = s.t0 + stopAll;
-  const isWinLbl = (e) => e[1] === 'text' && !/balance|bet|round|id|time|auto/i.test(e[2]) && /[¥$€]|d.d/.test(e[3]) && num(e[3]) > 0;
+  const isWinLbl = (e) => e[1] === 'text' && !/balance|bet|round|id|time|auto/i.test(e[2]) && /[¥$€]|\d\.\d/.test(e[3]) && num(e[3]) > 0;
   const winTexts = E.filter((e) => isWinLbl(e) && e[0] >= T - 50);
   const winT = winTexts[0];
   if (!winT) continue;
@@ -178,12 +189,12 @@ for (const s of res.filter((x) => !x.quick)) {
   winSpins.push({
     mode: s.mode, reelsStoppedMs: r0(stopAll),
     specialMs: special.length ? [r0(special[0][0] - s.t0), r0(Math.min(line ? line[0] : Infinity, winT[0]) - s.t0)] : 'none',
-    lineMs: line ? r0(rel(line)) : null, winShownMs: r0(rel(winT)), winCountMs: [r0(rel(winT)), r0(rel(winTexts[winTexts.length - 1]))],
+    lineMs: line ? r0(rel(line)) : null,
+    lineCycleMs: (() => { const sh = E.filter((e) => e[1] === 'show' && /line/i.test(e[2]) && e[0] >= T - 50).map((e) => e[0]); const d = []; for (let i = 1; i < sh.length; i++) if (sh[i] - sh[i - 1] > 80) d.push(sh[i] - sh[i - 1]); return d.length ? r0(med(d)) : null; })(), winShownMs: r0(rel(winT)), winCountMs: [r0(rel(winT)), r0(rel(winTexts[winTexts.length - 1]))],
     balanceRollMs: bal.length ? [r0(rel(bal[0])), r0(rel(bal[bal.length - 1]))] : null,
     readyMs: ready ? r0(rel(ready)) : null,
     bigWin: big ? { startMs: r0(rel(big)), endMs: bigEnd ? r0(rel(bigEnd)) : null } : 'none',
     winX: winAmt && lastBet ? r2(winAmt / lastBet) : null,
-    winValues: [...new Set(winVals)].slice(0, 6),
   });
 }
 

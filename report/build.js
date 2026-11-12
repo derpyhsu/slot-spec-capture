@@ -125,30 +125,31 @@ function feel(s) {
   const v = (x, unit = '') => (x === null || x === undefined ? '量不到' : x === 'none' ? '無' : `${x}${unit}`);
   const span = (a) => (Array.isArray(a) ? `${(a[0] / 1000).toFixed(2)}–${(a[1] / 1000).toFixed(2)} s` : v(a));
   const at = (x) => (typeof x === 'number' ? `${(x / 1000).toFixed(2)} s` : v(x));
-  const MODE = { normal: '一般', turbo: '加速', super: '極速' };
+  const MODE = { normal: '一般', turbo: '加速', super: '極速', ...(p.modeNames || {}) };
   L.push(`# ${g.title || g.id}：表演與體感`, '', `- 記錄日期：${s.capturedAt}`,
     '- 量測值來自引擎（每幀位置、事件時間），誤差約 ±1 幀（約 17 ms）。「量不到」= 這次沒有資料；「無」= 有觀察，確定沒有。', '');
   if (!m) { L.push('尚未量測。'); return L.join('\n'); }
   const c = m.cell || {};
   L.push('## 基準', '', `- 單格高度：${v(c.heightPx, ' px')}（設計解析度 ${c.design ? c.design.join('×') : '量不到'}）`, `- 轉軸數（含特殊軸）：${v(c.columns)}`, '- 距離一律以「格」表示；速度 = 格/秒。', '');
-  L.push('## 轉輪（各速度模式）', '', '| 模式 | 樣本轉數 | 開轉 | 捲速 格/秒 | 停輪間隔 ms | 減速 ms | 回彈 | 首軸停 | 末軸停 |', '|---|---|---|---|---|---|---|---|---|');
+  L.push('## 轉輪（各速度模式）', '', '| 模式 | 樣本轉數 | 開轉 | 開轉前上拉 | 捲速 格/秒 | 停輪間隔 ms | 減速 ms | 回彈 | 首軸停 | 末軸停 |', '|---|---|---|---|---|---|---|---|---|---|');
   for (const x of m.speedModes || []) {
     const start = x.startGapMs === 0 ? '各軸同時' : x.startGapMs == null ? '量不到' : `間隔 ${x.startGapMs} ms`;
     const b = x.bounce == null ? '量不到' : x.bounce === 'none' ? '無' : `有，${x.bounce.cells} 格、${x.bounce.ms} ms`;
-    L.push(`| ${MODE[x.mode] || x.mode} | ${x.analysed}/${x.spins} | ${start} | ${v(x.scrollCellsPerSec)} | ${v(x.stopGapMs)} | ${v(x.decelMs)} | ${b} | ${at(x.firstStopMs)} | ${at(x.lastStopMs)} |`);
+    const pu = x.pullUp == null ? '量不到' : x.pullUp === 'none' ? '無' : `${x.pullUp.cells} 格、${x.pullUp.ms} ms`;
+    L.push(`| ${MODE[x.mode] || x.mode} | ${x.analysed}/${x.spins} | ${start} | ${pu} | ${v(x.scrollCellsPerSec)} | ${v(x.stopGapMs)} | ${v(x.decelMs)} | ${b} | ${at(x.firstStopMs)} | ${at(x.lastStopMs)} |`);
   }
   L.push('', '減速 = 從還在全速到停在最遠點的時間；0 表示全速直接停住，再靠回彈收尾。開轉、停輪時間都從按下 Spin 起算。', '');
   L.push('## 急停（轉動中再按一次 Spin）', '', '| 模式 | 次數 | 再按 → 全部停妥 | 首軸到末軸 | 回彈 | 備註 |', '|---|---|---|---|---|---|');
   for (const q of m.quickStop || []) L.push(`| ${MODE[q.mode] || q.mode} | ${q.samples} | ${v(q.tapToAllStoppedMs, ' ms')} | ${v(q.firstToLastReelMs, ' ms')} | ${q.bounce == null ? '量不到' : q.bounce === 'none' ? '無' : q.bounce.cells + ' 格'} | ${q.note || ''} |`);
   L.push('');
   const an = m.anticipation;
-  L.push('## 咪牌', '');
+  L.push('## 咪牌', '', '判定：某軸比該模式平常的停輪間隔多等 300 ms 以上。原因（咪牌或特色）見「其他體感」。', '');
   if (an === 'notSeen' || !an) L.push('- 本次未出現。方向、等待時長量不到。');
   else { L.push('| 模式 | 第幾軸開始 | 多等 ms | 咪牌捲速 格/秒 |', '|---|---|---|---|'); for (const a of an) L.push(`| ${MODE[a.mode] || a.mode} | ${a.reel} | ${a.extraWaitMs} | ${v(a.slowCellsPerSec)} |`); }
   L.push('');
   L.push('## 中獎表演時序', '', '從按下 Spin 起算。各段用通用事件判斷，不依賴特定節點。', '',
-    '| # | 模式 | 停輪完成 | 特殊玩法表演 | 亮線 | 贏分出現 | 贏分跑分 | 餘額入帳 | 下一轉可按 | 贏分（押注倍數） |', '|---|---|---|---|---|---|---|---|---|---|');
-  (m.winSequence || []).forEach((w, i) => L.push(`| ${i + 1} | ${MODE[w.mode] || w.mode} | ${at(w.reelsStoppedMs)} | ${span(w.specialMs)} | ${at(w.lineMs)} | ${at(w.winShownMs)} | ${span(w.winCountMs)} | ${span(w.balanceRollMs)} | ${at(w.readyMs)} | ${v(w.winX, '×')} |`));
+    '| # | 模式 | 停輪完成 | 特殊玩法表演 | 亮線 | 亮線輪播（每條） | 贏分出現 | 贏分跑分 | 餘額入帳 | 下一轉可按 | 贏分（押注倍數） |', '|---|---|---|---|---|---|---|---|---|---|---|');
+  (m.winSequence || []).forEach((w, i) => L.push(`| ${i + 1} | ${MODE[w.mode] || w.mode} | ${at(w.reelsStoppedMs)} | ${span(w.specialMs)} | ${at(w.lineMs)} | ${v(w.lineCycleMs, ' ms')} | ${at(w.winShownMs)} | ${span(w.winCountMs)} | ${span(w.balanceRollMs)} | ${at(w.readyMs)} | ${v(w.winX, '×')} |`));
   if (!(m.winSequence || []).length) L.push('| — | 本次沒有中獎轉 | | | | | | | | |');
   L.push('');
   L.push('## 大獎', '');

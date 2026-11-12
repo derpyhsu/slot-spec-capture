@@ -35,6 +35,7 @@
     c.dispatchEvent(new PointerEvent('pointerup', o)); c.dispatchEvent(new MouseEvent('mouseup', o));
   }
   async function tap(name) {
+    if (Array.isArray(name)) { await tapXY(name[0], name[1]); return name; }
     const n = find(name); if (!n) return 'notFound';
     const [x, y] = screenOf(n); await tapXY(x, y); return [Math.round(x), Math.round(y)];
   }
@@ -71,8 +72,8 @@
   // ---- presentation recorder ----
   const ev = [];
   let rec = false;
-  let act = 0, txt = 0, learning = false; const noise = new Set(); // nodes that blink while idle // counts events that mean the game is still presenting (not tween builds)
-  const push = (k, n, v) => { if (rec && ev.length < 60000) { ev.push([now(), k, n, v]); if (learning && (k === 'show' || k === 'hide')) noise.add(n); if ((k === 'show' || k === 'hide' || k === 'text') && !noise.has(n)) act++; if (k === 'text') txt++; } };
+  let act = 0, txt = 0, learning = false; const noise = new Set(), toggles = {}; // nodes that blink while idle // counts events that mean the game is still presenting (not tween builds)
+  const push = (k, n, v) => { if (rec && ev.length < 60000) { ev.push([now(), k, n, v]); if (k === 'show' || k === 'hide') { if (learning) noise.add(n); toggles[n] = (toggles[n] || 0) + 1; if (toggles[n] > 6) noise.add(n); } if ((k === 'show' || k === 'hide' || k === 'text') && !noise.has(n)) act++; if (k === 'text') txt++; } };
   const hook = (proto, fn, k, nameOf) => {
     if (!proto || !proto[fn] || proto[fn].__sc) return;
     const orig = proto[fn];
