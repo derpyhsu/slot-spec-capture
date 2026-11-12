@@ -148,6 +148,7 @@
 
   // Node visibility + short label changes, polled.
   let seen = new Map(), lab = new Map();
+  let lastReady = '';
   function poll() {
     if (!rec) return;
     const vis = new Map(), lb = new Map();
@@ -164,18 +165,23 @@
     for (const [u, nm] of vis) if (!seen.has(u)) push('show', nm);
     for (const [u, nm] of seen) if (!vis.has(u)) push('hide', nm);
     for (const [u, [nm, s]] of lb) { const p = lab.get(u); if (p && p[1] !== s) push('text', nm, s); }
+    const sb = SPIN.map((nm) => find(nm)).find(Boolean), btc = sb && sb.getComponent(cc.Button);
+    const rd = btc ? (btc.interactable && btc.enabledInHierarchy !== false ? '1' : '0') : '?';
+    if (rd !== lastReady) { push('ready', 'spin', rd); lastReady = rd; }
     seen = vis; lab = lb;
   }
   setInterval(poll, 100);
 
   const SPIN = ['SpinBtn', 'HitArea', 'SpinButton', 'Spin', 'BtnSpin', 'spinBtn'];
-  async function spin(btn, quietMs = 3000, maxMs = 240000) {
+  let label = '';
+  async function spin(btn, quietMs = 3000, maxMs = 240000, quick = false) {
     const start = ev.length, ts = now();
-    push('mark', 'spin', String(ts));
+    push('mark', quick ? 'qs' : 'spin', label);
     const b = btn || SPIN.find((n) => find(n));
     if (!b) return { ms: 0, events: 0, error: 'noSpinButton' };
     // Retry the tap when nothing on screen changes text (balance/bet) within 4 s: UI may not be interactable yet.
-    for (let k = 0; k < 3; k++) { const t0 = txt; await tap(b); let ok = false; for (let w = 0; w < 16 && !ok; w++) { await sleep(250); ok = txt !== t0; } if (ok) break; }
+    if (quick) { await tap(b); await sleep(250); push('mark', 'qsTap', label); await tap(b); }
+    else for (let k = 0; k < 3; k++) { const t0 = txt; await tap(b); let ok = false; for (let w = 0; w < 16 && !ok; w++) { await sleep(250); ok = txt !== t0; } if (ok) break; }
     let last = act, lastT = now();
     while (now() - ts < maxMs) {
       await sleep(250);
@@ -185,7 +191,58 @@
     return { ms: now() - ts, events: ev.length - start };
   }
 
+
+  // ---- help page structure: sprites (frame names) and labels in order ----
+  function helpRoot() {
+    let r = null;
+    const walk = (n) => { if (!r && /Help.*(View|Panel)|HelpMenu|Rule.*View/i.test(n.name)) r = n; n.children.forEach(walk); };
+    walk(scene()); return r;
+  }
+  function spriteOf(n) { const sp = n.getComponent(cc.Sprite); return sp && sp.spriteFrame ? sp.spriteFrame : null; }
+  function helpDump() {
+    const root = helpRoot(); if (!root) return 'noHelp';
+    const out = [];
+    const walk = (n, d) => {
+      const sf = spriteOf(n), l = n.getComponent(cc.Label) || n.getComponent(cc.RichText);
+      if (sf) out.push(d + 's ' + n.name + ' = ' + sf.name);
+      if (l && l.string && l.string.trim()) out.push(d + 'l ' + n.name + ' = ' + l.string.replace(/\n/g, ' / '));
+      n.children.forEach((c) => walk(c, d + 1));
+    };
+    walk(root, 0); return out.join('\n');
+  }
+  // Export help-page sprites whose node or frame name matches re, as PNG data URLs (max width 700).
+  function exportSprites(re, max = 40) {
+    const root = helpRoot() || scene(), out = [], seenF = new Set();
+    const walk = (n) => {
+      const sf = spriteOf(n);
+      if (sf && out.length < max && (re.test(n.name) || re.test(sf.name)) && !seenF.has(sf.name)) {
+        seenF.add(sf.name);
+        try {
+          const tex = is3 ? sf.texture : sf.getTexture();
+          const img = is3 ? tex && tex.image && tex.image.data : tex && (tex._image || tex.getHtmlElementObj && tex.getHtmlElementObj());
+          const r = is3 ? sf.rect : sf.getRect(), rot = is3 ? sf.rotated : sf.isRotated();
+          const w = rot ? r.height : r.width, h = rot ? r.width : r.height;
+          const k = Math.min(1, 700 / r.width), c = document.createElement('canvas');
+          c.width = Math.round(r.width * k); c.height = Math.round(r.height * k);
+          const g = c.getContext('2d');
+          if (rot) { g.translate(0, c.height); g.rotate(-Math.PI / 2); g.drawImage(img, r.x, r.y, w, h, 0, 0, c.height, c.width); }
+          else g.drawImage(img, r.x, r.y, w, h, 0, 0, c.width, c.height);
+          out.push({ node: n.name, frame: sf.name, w: c.width, h: c.height, url: c.toDataURL('image/png') });
+        } catch (e) { out.push({ node: n.name, frame: sf.name, error: String(e).slice(0, 80) }); }
+      }
+      n.children.forEach(walk);
+    };
+    walk(root); return out;
+  }
+  function meta() {
+    const d = cc.view.getDesignResolutionSize(), f = cc.view.getFrameSize();
+    return { engine: cc.ENGINE_VERSION, design: [d.width, d.height], frame: [f.width, f.height] };
+  }
+
   window.__specCap = {
+    helpDump, exportSprites, meta,
+    setLabel(x) { label = x; return x; },
+    quick(n, btn) { const st = (this._run = { done: 0, n, end: false }); this.start(); (async () => { for (let i = 0; i < n; i++) { await spin(btn, 3000, 60000, true); st.done++; } this.stop(); st.end = true; })(); return 'started'; },
     find, tap, tapXY, labels, buttons, rules, spin,
     start() { seen = new Map(); lab = new Map(); rec = true; push('mark', 'start'); poll(); return 'rec'; },
     // Fire-and-forget batch so a long free game never times out the MCP call. Poll status().
